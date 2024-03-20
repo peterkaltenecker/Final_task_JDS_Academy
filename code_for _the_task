@@ -1,0 +1,481 @@
+###############################
+# downloading the data - bash #
+###############################
+
+wget 46.101.230.157/testtask/dilans_data.csv
+mkdir dilan
+mv /home/dscipeti/dilans_data.csv /home/dscipeti/dilan/dilans_data.csv
+
+
+#################################
+# initial data wrangling - bash #
+#################################
+
+# separating date and time into two columns
+sed 's/ /;/1' dilans_data.csv > /home/dscipeti/dilan/dilans_data_2.csv
+
+# separating the different types of data into certain tables with bash script
+mcedit data_sep.sh
+
+#!/usr/bin/env bash
+grep 'read' /home/dscipeti/dilan/dilans_data_2.csv > /home/dscipeti/dilan/all_readers.csv
+grep 'subscribe' /home/dscipeti/dilan/dilans_data_2.csv > /home/dscipeti/dilan/subscribers.csv
+grep 'buy' /home/dscipeti/dilan/dilans_data_2.csv > /home/dscipeti/dilan/purchases.csv
+
+chmod 700 data_sep.sh
+./data_sep.sh
+
+# checking if the separation worked well
+head -300 all_readers.csv
+head -300 subscribers.csv
+head -300 purchases.csv
+
+wc -l dilans_data_2.csv
+wc -l all_readers.csv
+wc -l subscribers.csv
+wc -l purchases.csv
+
+# separating the new and returning readers into certain tables
+mcedit reader_data_sep.sh
+
+#!/usr/bin/env bash
+grep 'Reddit\|AdWords\|SEO' /home/dscipeti/dilan/all_readers.csv > /home/dscipeti/dilan/new_readers.csv
+sed '/Reddit\|AdWords\|SEO/d' /home/dscipeti/dilan/all_readers.csv > /home/dscipeti/dilan/ret_readers.csv
+
+chmod 700 reader_data_sep.sh
+./reader_data_sep.sh
+
+# checking the new and returning readers' separation as well
+head -300 new_readers.csv
+head -300 ret_readers.csv
+
+wc -l all_readers.csv
+wc -l new_readers.csv
+wc -l ret_readers.csv
+
+
+##################################
+# initial data discovery in bash #
+##################################
+
+# discovering the number of users in the different groups (useful for funnel analysis as well)
+# number of new readers
+wc -l new_readers.csv
+
+# number of returning readers
+cut -d';' -f5 ret_readers.csv | sort | uniq | wc -l
+
+# number of subscribers
+wc -l subscribers.csv
+
+# number of purchases and that of customers (there are less customers than purchases, therefore there are customers who bought both products)
+wc -l purchases.csv
+cut -d';' -f4 purchases.csv | sort | uniq | wc -l
+
+# segmentation of new readers for country
+cut -d';' -f4 new_readers.csv | sort | uniq -c
+
+# segmentation of new readers for source
+cut -d';' -f6 new_readers.csv | sort | uniq -c
+
+# segmentation of new readers for topic
+cut -d';' -f7 new_readers.csv | sort | uniq -c
+
+# segmentation of new readers for date
+cut -d';' -f1 new_readers.csv | sort | uniq -c
+
+
+################################################
+# creating tables and importing data into psql #
+################################################
+
+CREATE TABLE new_readers 
+(
+  my_date      DATE,
+  my_time      TIME,
+  event_type   TEXT,
+  country      TEXT,
+  user_id      BIGINT,
+  source       TEXT,
+  topic        TEXT
+);
+
+COPY new_readers FROM '/home/dscipeti/dilan/new_readers.csv' DELIMITER ';';
+
+CREATE TABLE ret_readers 
+(
+  my_date      DATE,
+  my_time      TIME,
+  event_type   TEXT,
+  country      TEXT,
+  user_id      BIGINT,
+  topic        TEXT
+);
+
+COPY ret_readers FROM '/home/dscipeti/dilan/ret_readers.csv' DELIMITER ';';
+
+CREATE TABLE subs 
+(
+  my_date      DATE,
+  my_time      TIME,
+  event_type   TEXT,
+  user_id      BIGINT
+);
+
+COPY subs FROM '/home/dscipeti/dilan/subscribers.csv' DELIMITER ';';
+
+CREATE TABLE purchases 
+(
+  my_date      DATE,
+  my_time      TIME,
+  event_type   TEXT,
+  user_id      BIGINT,
+  price        INT
+);
+
+COPY purchases FROM '/home/dscipeti/dilan/purchases.csv' DELIMITER ';';
+
+# checking if the tables are correct
+SELECT * FROM new_readers LIMIT 50;
+SELECT * FROM ret_readers LIMIT 50;
+SELECT * FROM subs LIMIT 50;
+SELECT * FROM purchases LIMIT 50;
+
+# rechecking and comparing the numbers to bash
+SELECT COUNT(*) FROM new_readers;			--number of new readers
+SELECT COUNT(DISTINCT(user_id)) FROM ret_readers;	--number of returning readers
+SELECT COUNT(*) FROM subs;				--number of subscribers
+SELECT COUNT(*) FROM purchases;				--number of purchases
+SELECT COUNT(DISTINCT(user_id)) FROM purchases;		--number of customers
+
+
+##############################
+# analysing the data in psql #
+##############################
+
+# segmentation for the new readers
+SELECT 
+  country,
+  source,
+  topic,
+  COUNT(user_id) AS new_users
+FROM new_readers
+GROUP BY country, source, topic
+ORDER BY new_users DESC;
+
+# segmentation for the subscibers
+SELECT 
+  new_readers.country,
+  new_readers.source,
+  new_readers.topic,
+  COUNT(subs.user_id) AS new_users
+FROM new_readers
+  JOIN subs ON new_readers.user_id = subs.user_id
+GROUP BY new_readers.country, new_readers.source, new_readers.topic
+ORDER BY new_users DESC;
+
+# segmentation for the revenue
+SELECT 
+  new_readers.country,
+  new_readers.source,
+  new_readers.topic,
+  SUM(purchases.price) AS revenue
+FROM new_readers
+  JOIN purchases ON new_readers.user_id = purchases.user_id
+GROUP BY new_readers.country, new_readers.source, new_readers.topic
+ORDER BY revenue DESC;
+
+# daily revenue during the three months
+SELECT
+  total.my_date,
+  total.total_revenue,
+  ebook.revenue_ebook,
+  course.revenue_course
+FROM
+  (SELECT
+    my_date,
+    SUM(price) AS total_revenue
+  FROM purchases
+  GROUP BY my_date
+  ORDER BY my_date) AS total
+  JOIN
+    (SELECT
+      my_date,
+      SUM(price) AS revenue_ebook
+    FROM purchases
+    WHERE price = 8
+    GROUP BY my_date
+    ORDER BY my_date) AS ebook ON total.my_date = ebook.my_date
+  JOIN
+    (SELECT
+      my_date,
+      SUM(price) AS revenue_course
+    FROM purchases
+    WHERE price = 80
+    GROUP BY my_date
+    ORDER BY my_date) AS course ON total.my_date = course.my_date;
+
+# a shorter alternative query for the daily revenue (above)
+SELECT
+  total.my_date,
+  total.total_revenue,
+  ebook.revenue_ebook,
+  total.total_revenue - ebook.revenue_ebook AS revenue_course
+FROM
+  (SELECT
+    my_date,
+    SUM(price) AS total_revenue
+  FROM purchases
+  GROUP BY my_date
+  ORDER BY my_date) AS total
+  JOIN
+    (SELECT
+      my_date,
+      SUM(price) AS revenue_ebook
+    FROM purchases
+    WHERE price = 8
+    GROUP BY my_date
+    ORDER BY my_date) AS ebook ON total.my_date = ebook.my_date;
+
+# number of purchases and revenue by product
+SELECT 
+  COUNT(user_id) AS ebook_buyers,
+  SUM(price) AS revenue_ebook
+FROM purchases
+WHERE price = 8;
+
+SELECT 
+  COUNT(user_id) AS course_buyers,
+  SUM(price) AS revenue_course
+FROM purchases
+WHERE price = 80;
+
+# alternative query for the number of purchases and revenue by product to visualise in looker studio
+SELECT 
+  COUNT(user_id) AS buyers,
+  SUM(price) AS revenue
+FROM purchases
+WHERE price = 8
+UNION
+SELECT 
+  COUNT(user_id) AS buyers,
+  SUM(price) AS revenue
+FROM purchases
+WHERE price = 80;
+
+# funnel analysis
+SELECT *
+FROM
+  (SELECT COUNT(*) FROM new_readers
+  UNION
+  SELECT COUNT(DISTINCT(user_id)) FROM ret_readers
+  UNION
+  SELECT COUNT(*) FROM subs
+  UNION
+  SELECT COUNT(DISTINCT(user_id)) FROM purchases) AS funnel
+ORDER BY count DESC;
+
+# alternative query for the funnel: for better visualisation in looker studio
+SELECT 
+  COUNT(DISTINCT(new_readers.user_id)) AS new_users,
+  COUNT(DISTINCT(ret_readers.user_id)) AS ret_users,
+  COUNT(DISTINCT(subs.user_id)) AS subcribers,
+  COUNT(DISTINCT(purchases.user_id)) AS customers
+FROM new_readers
+  FULL JOIN ret_readers ON new_readers.user_id = ret_readers.user_id
+  FULL JOIN subs ON new_readers.user_id = subs.user_id
+  FULL JOIN purchases ON new_readers.user_id = purchases.user_id;
+
+# daily trends for the funnel analysis
+# (in this case I did not use the last day 2018-03-31, since it was not a whole day and data are missing)
+SELECT 
+  new_u.my_date,
+  new_u.new_users,
+  ret_u.ret_users,
+  sub_u.subscribers,
+  cust_u.customers
+FROM
+  (SELECT
+    my_date,
+    COUNT(user_id) AS new_users
+  FROM new_readers
+  GROUP BY my_date
+  ORDER BY my_date) AS new_u
+  JOIN
+    (SELECT
+      my_date,
+      COUNT(DISTINCT(user_id)) AS ret_users
+    FROM ret_readers
+    WHERE my_date != '2018-03-31'
+    GROUP BY my_date
+    ORDER BY my_date) AS ret_u ON new_u.my_date = ret_u.my_date
+  JOIN
+    (SELECT 
+      my_date,
+      COUNT(user_id) AS subscribers
+    FROM subs
+    GROUP BY my_date
+    ORDER BY my_date) AS sub_u ON new_u.my_date = sub_u.my_date
+  JOIN
+    (SELECT
+      my_date,
+      COUNT(DISTINCT(user_id)) AS customers
+    FROM purchases
+    GROUP BY my_date
+    ORDER BY my_date) AS cust_u ON new_u.my_date = cust_u.my_date;
+
+# descriptive statistics of the users who return after the first visit
+# (the last two weeks were not included in these calculations)
+SELECT MIN(subquery.n_returns)
+FROM
+  (SELECT 
+    user_id,
+    COUNT(my_date) AS n_returns
+  FROM ret_readers
+  WHERE my_date < '2018-03-15'
+  GROUP BY user_id
+  ORDER BY user_id) AS subquery;	--minimum
+
+SELECT MAX(subquery.n_returns)
+FROM
+  (SELECT 
+    user_id,
+    COUNT(my_date) AS n_returns
+  FROM ret_readers
+  WHERE my_date < '2018-03-15'
+  GROUP BY user_id
+  ORDER BY user_id) AS subquery;	--maximum
+
+SELECT AVG(subquery.n_returns)
+FROM
+  (SELECT 
+    user_id,
+    COUNT(my_date) AS n_returns
+  FROM ret_readers
+  WHERE my_date < '2018-03-15'
+  GROUP BY user_id
+  ORDER BY user_id) AS subquery;	--mean
+
+SELECT n_returns AS median
+FROM
+  (SELECT 
+    user_id,
+    COUNT(my_date) AS n_returns
+  FROM ret_readers
+  WHERE my_date < '2018-03-15'
+  GROUP BY user_id
+  ORDER BY n_returns
+  OFFSET 22876) AS subquery
+LIMIT 1;				--median
+
+# total income by the different user segments
+SELECT SUM(price) AS total_revenue
+FROM purchases;					--total revenue
+
+SELECT SUM(price) AS revenue_from_ret_readers
+FROM purchases
+WHERE user_id IN
+  (SELECT DISTINCT(user_id)
+  FROM ret_readers);				--revenue from the returning users
+
+SELECT SUM(price) AS revenue_from_subs
+FROM purchases
+WHERE user_id IN
+  (SELECT user_id
+  FROM subs);					--revenue from the subscribers
+
+SELECT SUM(price) AS revenue_from_one_time_readers
+FROM purchases
+WHERE user_id IN
+  (SELECT user_id
+  FROM new_readers
+  WHERE user_id NOT IN
+    (SELECT DISTINCT(user_id)
+    FROM ret_readers));				--revenue from the one-time readers
+
+# alternative query for the above to visualise it in looker studio
+SELECT SUM(price)
+FROM purchases
+UNION
+SELECT SUM(price)
+FROM purchases
+WHERE user_id IN
+  (SELECT DISTINCT(user_id)
+  FROM ret_readers)
+UNION
+SELECT SUM(price)
+FROM purchases
+WHERE user_id IN
+  (SELECT user_id
+  FROM subs)
+UNION
+SELECT SUM(price)
+FROM purchases
+WHERE user_id IN
+  (SELECT user_id
+  FROM new_readers
+  WHERE user_id NOT IN
+    (SELECT DISTINCT(user_id)
+    FROM ret_readers))
+ORDER BY sum DESC;
+
+
+###################################################################
+# regression analysis of the new readers and prediction in python #
+###################################################################
+
+# starting running a jupyter notebook from the server
+jupyter notebook --browser any --port 8899
+
+# importing the necessary packages in jupyter notebook
+import numpy as np
+import pandas as pd
+import matplotlib
+import matplotlib.pyplot as plt 
+%matplotlib inline
+
+# importing the data into python and checking the created table
+new_readers = pd.read_csv('/home/dscipeti/dilan/new_readers.csv', delimiter = ';', 
+            names = ['my_date', 'my_time', 'event_type', 'country', 'user_id', 'source', 'topic'])
+
+new_readers.head()
+
+# data transformation
+daily_new_readers = new_readers.groupby('my_date', as_index = False).count().user_id
+daily_new_readers.head()
+
+# defining the 'x' and 'y' values and plotting them
+x = daily_new_readers.index
+y = daily_new_readers.values
+plt.scatter(x, y)
+
+# linear regression
+model = np.polyfit(x, y, 1)
+predict = np.poly1d(model)
+
+x_test = np.linspace(0, 88)
+y_pred = predict(x_test[:, None])
+plt.scatter(x, y)
+plt.plot(x_test, y_pred, c = 'r')
+plt.show()
+
+model
+
+predict(88 + 30)
+
+from sklearn.metrics import r2_score
+r2_score(y, predict(x))
+
+# polynomial regression (only to check the difference in the prediction)
+model = np.polyfit(x, y, 2)
+predict = np.poly1d(model)
+
+x_test = np.linspace(0, 88)
+y_pred = predict(x_test[:, None])
+plt.scatter(x, y)
+plt.plot(x_test, y_pred, c = 'r')
+plt.show()
+
+model
+
+predict(88 + 30)
