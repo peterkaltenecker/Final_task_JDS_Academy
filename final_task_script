@@ -2,9 +2,9 @@
 # downloading the data - bash #
 ###############################
 
-wget 46.101.230.157/testtask/dilans_data.csv
+wget .../.../dilans_data.csv
 mkdir dilan
-mv /home/dscipeti/dilans_data.csv /home/dscipeti/dilan/dilans_data.csv
+mv /.../.../dilans_data.csv /.../.../dilan/dilans_data.csv
 
 
 #################################
@@ -12,15 +12,15 @@ mv /home/dscipeti/dilans_data.csv /home/dscipeti/dilan/dilans_data.csv
 #################################
 
 # separating date and time into two columns
-sed 's/ /;/1' dilans_data.csv > /home/dscipeti/dilan/dilans_data_2.csv
+sed 's/ /;/1' dilans_data.csv > /.../.../dilan/dilans_data_2.csv
 
 # separating the different types of data into certain tables with bash script
 mcedit data_sep.sh
 
 #!/usr/bin/env bash
-grep 'read' /home/dscipeti/dilan/dilans_data_2.csv > /home/dscipeti/dilan/all_readers.csv
-grep 'subscribe' /home/dscipeti/dilan/dilans_data_2.csv > /home/dscipeti/dilan/subscribers.csv
-grep 'buy' /home/dscipeti/dilan/dilans_data_2.csv > /home/dscipeti/dilan/purchases.csv
+grep 'read' /.../.../dilan/dilans_data_2.csv > /.../.../dilan/all_readers.csv
+grep 'subscribe' /.../.../dilan/dilans_data_2.csv > /.../.../dilan/subscribers.csv
+grep 'buy' /.../.../dilan/dilans_data_2.csv > /.../.../dilan/purchases.csv
 
 chmod 700 data_sep.sh
 ./data_sep.sh
@@ -39,8 +39,8 @@ wc -l purchases.csv
 mcedit reader_data_sep.sh
 
 #!/usr/bin/env bash
-grep 'Reddit\|AdWords\|SEO' /home/dscipeti/dilan/all_readers.csv > /home/dscipeti/dilan/new_readers.csv
-sed '/Reddit\|AdWords\|SEO/d' /home/dscipeti/dilan/all_readers.csv > /home/dscipeti/dilan/ret_readers.csv
+grep 'Reddit\|AdWords\|SEO' /.../.../dilan/all_readers.csv > /.../.../dilan/new_readers.csv
+sed '/Reddit\|AdWords\|SEO/d' /.../.../dilan/all_readers.csv > /.../.../dilan/ret_readers.csv
 
 chmod 700 reader_data_sep.sh
 ./reader_data_sep.sh
