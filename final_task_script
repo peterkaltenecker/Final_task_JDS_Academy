@@ -424,7 +424,7 @@ ORDER BY sum DESC;
 # regression analysis of the new readers and prediction in python #
 ###################################################################
 
-# starting running a jupyter notebook from the server
+# to start running a jupyter notebook from the server
 jupyter notebook --browser any --port 8899
 
 # importing the necessary packages in jupyter notebook
