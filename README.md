@@ -1,7 +1,7 @@
 ## Final Task - JDS Academy
 
 This was the final exam of a 3 months long data science course at [JDS Academy](https://data36.com/junior-data-scientist-akademia/) (from February to May, 2023).\
-The objective of the course was to prepare participants to become junior data scientists; its materials included Bash, PostgreSQL and Python.
+The objective of the course was to prepare participants to become junior data scientists; its learning materials included Bash, PostgreSQL and Python.
 \
 \
 The final assignment involved a fictitious online business known as Dilan's blog.\
