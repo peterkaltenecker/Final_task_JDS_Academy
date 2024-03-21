@@ -10,3 +10,12 @@ His blog covers the six main continents of the world, is accessible from eight c
 \
 \
 The question was how Dilan could invest more work, time and money into his blog in the most effective way possible to make it bigger, better and more profitable.
+\
+\
+\
+\
+The tools that I used for the analysis:
+- Bash for initial data wrangling and discovery
+- PostgreSQL for most of the analysis
+- Looker Studio for data visualisation
+- Python for regression analysis
