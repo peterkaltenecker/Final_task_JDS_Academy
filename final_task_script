@@ -438,11 +438,11 @@ import matplotlib.pyplot as plt
 new_readers = pd.read_csv('/home/dscipeti/dilan/new_readers.csv', delimiter = ';', 
             names = ['my_date', 'my_time', 'event_type', 'country', 'user_id', 'source', 'topic'])
 
-new_readers.head()
+print(new_readers.head())
 
 # data transformation
 daily_new_readers = new_readers.groupby('my_date', as_index = False).count().user_id
-daily_new_readers.head()
+print(daily_new_readers.head())
 
 # defining the 'x' and 'y' values and plotting them
 x = daily_new_readers.index
@@ -459,12 +459,12 @@ plt.scatter(x, y)
 plt.plot(x_test, y_pred, c = 'r')
 plt.show()
 
-model
+print(model)
 
-predict(88 + 30)
+print(predict(88 + 30))
 
 from sklearn.metrics import r2_score
-r2_score(y, predict(x))
+print(r2_score(y, predict(x)))
 
 # polynomial regression (only to check the difference in the prediction)
 model = np.polyfit(x, y, 2)
@@ -476,6 +476,6 @@ plt.scatter(x, y)
 plt.plot(x_test, y_pred, c = 'r')
 plt.show()
 
-model
+print(model)
 
-predict(88 + 30)
+print(predict(88 + 30))
