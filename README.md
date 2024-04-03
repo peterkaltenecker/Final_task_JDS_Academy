@@ -18,4 +18,4 @@ The tools that I used for the analysis:
 - Bash for initial data wrangling and discovery
 - PostgreSQL for most of the analysis
 - Looker Studio for data visualisation
-- Python for regression analysis
+- Python for regression analysis (and for cohort analysis)
